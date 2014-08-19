@@ -3,7 +3,7 @@ var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var crypto = require('crypto');
-
+var session = require('express-session')
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -13,6 +13,7 @@ var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 
 var app = express();
+app.use(session({secret: 'keyboard cat'}));
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -24,9 +25,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
 
-app.get('/',
+app.get('/', util.checkUser,
 function(req, res) {
-  res.render('login');
+  res.render('index');
 });
 
 app.get('/signup',
@@ -34,50 +35,43 @@ function(req, res) {
   res.render('signup');
 });
 
-app.get('/links',
+app.get('/links', util.checkUser,
 function(req, res) {
   Links.reset().fetch().then(function(links) {
+    console.log("app.get links is working")
     res.send(200, links.models);
   });
 });
 
 
 //when submitting a new link
-app.post('/links',
+app.post('/links', /*util.checkUser,*/
 function(req, res) {
-  var uri = req.body.url;
-
-//route user to login page
-  res.render('login');
-
-
-
-
-//if login is successful, then run the code below
-//below checks for valid URL and adds to db
-  if (!util.isValidUrl(uri)) {
-    console.log('Not a valid url: ', uri);
+  console.log("app.post made it past util.checkUser")
+  if (!util.isValidUrl(req.body.url)) {
     return res.send(404);
   }
 
-  new Link({ url: uri }).fetch().then(function(found) {
+  new Link({ url: req.body.url }).fetch().then(function(found) {
     if (found) {
+      console.log('response is being sent when Link is found');
       res.send(200, found.attributes);
     } else {
-      util.getUrlTitle(uri, function(err, title) {
+      util.getUrlTitle(req.body.url, function(err, title) {
         if (err) {
           console.log('Error reading URL heading: ', err);
           return res.send(404);
         }
 
         var link = new Link({
-          url: uri,
+          url: req.body.url,
           title: title,
           base_url: req.headers.origin
         });
 
         link.save().then(function(newLink) {
           Links.add(newLink);
+          console.log("response code for link.save");
           res.send(200, newLink);
         });
       });
@@ -91,9 +85,12 @@ function(req, res) {
 
 app.post('/login',
 function(req, res) {
-  console.log("request.body from app.post: ", req.body);
+
+  var username = req.body.username;
+  var password = req.body.password;
+
     passHash = crypto.createHash('sha1');
-    passHash.update(req.body.password);
+    passHash.update(password);
     var hashedPassword = passHash.digest('hex');
     //TO-DO: PUT IN SALT HERE LATER!
 
@@ -101,9 +98,14 @@ function(req, res) {
     .fetch()
     .then(function(found) {
     if (found) {
-      res.render('index');
+      console.log("correct sign-in");
+      req.session.regenerate(function(){
+        req.session.user = username;
+        res.redirect('/');
+      })
     } else {
-      res.render('login');
+      console.log("wrong password/login");
+      res.redirect('/');
     }
   //       var user = new User({
   //         username: req.body.username,
@@ -116,18 +118,6 @@ function(req, res) {
   //       });
   });
 });
-
-
-
-app.get('/create',
-  function(req, res){
-
-
-
-  }
-);
-
-
 
 
 
@@ -152,7 +142,10 @@ function(req, res) {
 
         user.save().then(function(user) {
           Users.add(user);
-          res.render('index');
+          req.session.regenerate(function(){
+            req.session.user = req.body.username;
+            res.redirect('/');
+          });
         });
     }
   });

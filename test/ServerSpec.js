@@ -163,6 +163,7 @@ describe('', function() {
         link.save().then(function(){
           done();
         });
+
       });
 
       it('Returns the same shortened code', function(done) {
@@ -177,6 +178,7 @@ describe('', function() {
 
         requestWithSession(options, function(error, res, body) {
           var code = res.body.code;
+        console.log("link in requestWithSessions: ", link);
           expect(code).to.equal(link.get('code'));
           done();
         });
