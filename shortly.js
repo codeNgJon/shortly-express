@@ -2,6 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var crypto = require('crypto');
 
 
 var db = require('./app/config');
@@ -23,27 +24,37 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
 
-app.get('/', 
+app.get('/',
 function(req, res) {
-  res.render('index');
+  res.render('login');
 });
 
-app.get('/create', 
+app.get('/signup',
 function(req, res) {
-  res.render('index');
+  res.render('signup');
 });
 
-app.get('/links', 
+app.get('/links',
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.send(200, links.models);
   });
 });
 
-app.post('/links', 
+
+//when submitting a new link
+app.post('/links',
 function(req, res) {
   var uri = req.body.url;
 
+//route user to login page
+  res.render('login');
+
+
+
+
+//if login is successful, then run the code below
+//below checks for valid URL and adds to db
   if (!util.isValidUrl(uri)) {
     console.log('Not a valid url: ', uri);
     return res.send(404);
@@ -78,7 +89,74 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
+app.post('/login',
+function(req, res) {
+  console.log("request.body from app.post: ", req.body);
+    passHash = crypto.createHash('sha1');
+    passHash.update(req.body.password);
+    var hashedPassword = passHash.digest('hex');
+    //TO-DO: PUT IN SALT HERE LATER!
 
+  new User({ username: req.body.username, password: hashedPassword})
+    .fetch()
+    .then(function(found) {
+    if (found) {
+      res.render('index');
+    } else {
+      res.render('login');
+    }
+  //       var user = new User({
+  //         username: req.body.username,
+  //         password: hashedPassword,
+  //       });
+
+  //       user.save().then(function(user) {
+  //         Users.add(user);
+  //         res.render('index');
+  //       });
+  });
+});
+
+
+
+app.get('/create',
+  function(req, res){
+
+
+
+  }
+);
+
+
+
+
+
+app.post('/signup',
+function(req, res) {
+  console.log("request.body from app.post: ", req.body);
+    passHash = crypto.createHash('sha1');
+    passHash.update(req.body.password);
+    var hashedPassword = passHash.digest('hex');
+    //TO-DO: PUT IN SALT HERE LATER!
+
+  new User({ username: req.body.username})
+    .fetch()
+    .then(function(found) {
+    if (found) {
+      res.send(200, found.attributes);
+    } else {
+        var user = new User({
+          username: req.body.username,
+          password: hashedPassword,
+        });
+
+        user.save().then(function(user) {
+          Users.add(user);
+          res.render('index');
+        });
+    }
+  });
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
