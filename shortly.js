@@ -3,7 +3,8 @@ var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var crypto = require('crypto');
-var session = require('express-session')
+var session = require('express-session');
+var cookieParser = require('cookie-parser');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -13,7 +14,8 @@ var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 
 var app = express();
-app.use(session({secret: 'keyboard cat'}));
+app.use(cookieParser('keyboard cat'));
+app.use(session());
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -27,7 +29,17 @@ app.use(express.static(__dirname + '/public'));
 
 app.get('/', util.checkUser,
 function(req, res) {
-  res.render('index');
+  res.redirect('/index');
+});
+
+// app.get('/create', function(req,res){
+//   res.render('index');
+// });
+
+
+app.get('/index', util.checkUser,
+  function(req, res){
+    res.render('index');
 });
 
 app.get('/signup',
@@ -37,15 +49,29 @@ function(req, res) {
 
 app.get('/links', util.checkUser,
 function(req, res) {
+  console.log("app.get 'links' is happening")
   Links.reset().fetch().then(function(links) {
     console.log("app.get links is working")
     res.send(200, links.models);
   });
 });
 
+app.get('/logout',
+function(req, res) {
+  req.session.destroy(function(){
+    res.redirect('/');
+  });
+});
+
+app.get('/login',
+  function(req, res) {
+    res.render('login');
+  }
+);
+
 
 //when submitting a new link
-app.post('/links', /*util.checkUser,*/
+app.post('/links', util.checkUser,
 function(req, res) {
   console.log("app.post made it past util.checkUser")
   if (!util.isValidUrl(req.body.url)) {
@@ -89,13 +115,12 @@ function(req, res) {
   var username = req.body.username;
   var password = req.body.password;
 
-    passHash = crypto.createHash('sha1');
-    passHash.update(password);
-    var hashedPassword = passHash.digest('hex');
     //TO-DO: PUT IN SALT HERE LATER!
 
-  new User({ username: req.body.username, password: hashedPassword})
-    .fetch()
+ var user =  new User({ username: username, password: password})
+  console.log("user from login: ", user)
+
+    user.fetch()
     .then(function(found) {
     if (found) {
       console.log("correct sign-in");
@@ -123,10 +148,9 @@ function(req, res) {
 
 app.post('/signup',
 function(req, res) {
-  console.log("request.body from app.post: ", req.body);
-    passHash = crypto.createHash('sha1');
-    passHash.update(req.body.password);
-    var hashedPassword = passHash.digest('hex');
+    // passHash = crypto.createHash('sha1');
+    // passHash.update(req.body.password);
+    // var hashedPassword = passHash.digest('hex');
     //TO-DO: PUT IN SALT HERE LATER!
 
   new User({ username: req.body.username})
@@ -137,10 +161,12 @@ function(req, res) {
     } else {
         var user = new User({
           username: req.body.username,
-          password: hashedPassword,
+          password: req.body.password,
         });
+        console.log("user from signup: ", user)
 
         user.save().then(function(user) {
+          console.log("new user added")
           Users.add(user);
           req.session.regenerate(function(){
             req.session.user = req.body.username;
